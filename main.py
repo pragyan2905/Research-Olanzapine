@@ -8,6 +8,9 @@ from retrieval.embedder import Embedder
 from retrieval.vector_store import VectorStore
 from retrieval.reranker import ReRanker
 from retrieval.contribution_extractor import extract_key_sentences
+from retrieval.synthesizer import synthesize_comparison
+from retrieval.clusterer import cluster_papers
+from retrieval.performance_extractor import extract_performance_metrics
 
 
 def load_latest_dataset():
@@ -18,6 +21,7 @@ def load_latest_dataset():
     print(f"Loading dataset: {latest_file}")
     return pd.read_csv(latest_file)
 
+
 def build_index(df):
     embedder = Embedder()
     embeddings = embedder.encode(df["abstract"].tolist())
@@ -25,6 +29,7 @@ def build_index(df):
     store = VectorStore(dimension)
     store.add(embeddings)
     return embedder, store
+
 
 def research_query(df, embedder, store, query, top_k=5):
     query_embedding = embedder.encode([query])
@@ -98,6 +103,7 @@ def extract_year_constraint(query):
 
     return None
 
+
 def clean_query(query):
     query = re.sub(r"(after|since)\s+\d{4}", "", query.lower())
     query = re.sub(r"last\s+\d+\s+years", "", query)
@@ -137,14 +143,53 @@ def main():
         print("\nKey Contribution:")
 
         key_points = extract_key_sentences(row["abstract"])
-
         if key_points:
             for point in key_points:
                 print(f"- {point}")
         else:
             print("- No explicit contribution sentence detected.")
 
+        print("\nPerformance Signals:")
+
+        performance = extract_performance_metrics(row["abstract"])
+        if performance:
+            for item in performance:
+                print(f"- {item}")
+        else:
+            print("- No explicit performance metrics detected.")
+
         print("\n")
+
+    titles = []
+    abstracts = []
+    contributions = []
+
+    for _, row in results.iterrows():
+        titles.append(row["title"])
+        abstracts.append(row["abstract"])
+        key_points = extract_key_sentences(row["abstract"])
+        contributions.extend(key_points)
+
+    print(synthesize_comparison(titles, abstracts, contributions))
+
+    print("\nSemantic Clusters:\n")
+
+    abstracts = results["abstract"].tolist()
+    titles = results["title"].tolist()
+
+    if len(abstracts) >= 2:
+        labels = cluster_papers(abstracts, num_clusters=2)
+        clusters = {}
+
+        for label, title in zip(labels, titles):
+            clusters.setdefault(label, []).append(title)
+
+        for cluster_id, papers in clusters.items():
+            print(f"\nCluster {cluster_id + 1}:")
+            for paper in papers:
+                print(f"- {paper}")
+    else:
+        print("Not enough papers to cluster.")
 
 
 if __name__ == "__main__":
