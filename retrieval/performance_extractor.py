@@ -1,34 +1,35 @@
 import re
 
 
-def extract_performance_metrics(text):
+def extract_numeric_metrics(text):
+    text_lower = text.lower()
     metrics = []
 
-    text_lower = text.lower()
+    percent_matches = re.findall(r'(\d+\.?\d*)\s*%', text_lower)
 
-    # Percentage improvements
-    percent_patterns = re.findall(r'(\d+\.?\d*)\s*%', text_lower)
-    for p in percent_patterns:
-        metrics.append(f"{p}% improvement/metric mentioned")
+    for value in percent_matches:
+        value_float = float(value)
 
-    # Improvement phrases
-    improvement_patterns = re.findall(
-        r'(improves?|improvement|outperforms?|reduces?|achieves?)[^.]*\.',
-        text_lower
-    )
-    for match in improvement_patterns:
-        metrics.append(match.strip())
+        if "accuracy" in text_lower:
+            metric_type = "Accuracy"
+        elif "f1" in text_lower:
+            metric_type = "F1 Score"
+        elif "bleu" in text_lower:
+            metric_type = "BLEU"
+        elif "compute" in text_lower or "flops" in text_lower:
+            metric_type = "Compute Reduction"
+        elif "memory" in text_lower:
+            metric_type = "Memory Reduction"
+        elif "speed" in text_lower or "faster" in text_lower:
+            metric_type = "Speed Improvement"
+        else:
+            metric_type = "General Improvement"
 
-    # SOTA claims
-    if "state-of-the-art" in text_lower or "sota" in text_lower:
-        metrics.append("Claims state-of-the-art performance")
+        metrics.append({
+            "value": value_float,
+            "type": metric_type
+        })
 
-    # Benchmark mentions
-    benchmark_patterns = re.findall(
-        r'on\s+([A-Z][A-Za-z0-9\-]+)',
-        text
-    )
-    for bench in benchmark_patterns:
-        metrics.append(f"Evaluated on {bench}")
+    sota_flag = "state-of-the-art" in text_lower or "sota" in text_lower
 
-    return list(set(metrics))
+    return metrics, sota_flag

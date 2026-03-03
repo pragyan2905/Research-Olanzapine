@@ -10,7 +10,12 @@ from retrieval.reranker import ReRanker
 from retrieval.contribution_extractor import extract_key_sentences
 from retrieval.synthesizer import synthesize_comparison
 from retrieval.clusterer import cluster_papers
-from retrieval.performance_extractor import extract_performance_metrics
+from retrieval.performance_extractor import extract_numeric_metrics
+from retrieval.trend_analyzer import (
+    compute_yearly_volume,
+    compute_yearly_improvement,
+    compute_keyword_trend
+)
 
 
 def load_latest_dataset():
@@ -151,12 +156,16 @@ def main():
 
         print("\nPerformance Signals:")
 
-        performance = extract_performance_metrics(row["abstract"])
-        if performance:
-            for item in performance:
-                print(f"- {item}")
+        metrics, sota_flag = extract_numeric_metrics(row["abstract"])
+
+        if metrics:
+            for m in metrics:
+                print(f"- {m['value']}% ({m['type']})")
         else:
-            print("- No explicit performance metrics detected.")
+            print("- No numeric improvements detected.")
+
+        if sota_flag:
+            print("- Claims state-of-the-art performance")
 
         print("\n")
 
@@ -190,6 +199,48 @@ def main():
                 print(f"- {paper}")
     else:
         print("Not enough papers to cluster.")
+
+    print("\nPerformance Comparison Table:\n")
+
+    comparison_rows = []
+
+    for _, row in results.iterrows():
+        metrics, sota_flag = extract_numeric_metrics(row["abstract"])
+
+        for m in metrics:
+            comparison_rows.append({
+                "Title": row["title"],
+                "Year": row["year"],
+                "Improvement (%)": m["value"],
+                "Type": m["type"],
+                "SOTA": sota_flag
+            })
+
+    if comparison_rows:
+        comparison_df = pd.DataFrame(comparison_rows)
+        comparison_df = comparison_df.sort_values(
+            by="Improvement (%)",
+            ascending=False
+        )
+        print(comparison_df.to_string(index=False))
+    else:
+        print("No numeric comparison data extracted.")
+    print("\nResearch Trend Analysis:\n")
+    print("Paper Volume by Year:")
+    volume = compute_yearly_volume(df)
+    print(volume.to_string())
+    print("\nAverage Improvement (%) by Year:")
+    avg_improvement = compute_yearly_improvement(df, extract_numeric_metrics)
+    if avg_improvement is not None:
+        print(avg_improvement.to_string())
+    else:
+        print("No improvement data available.")
+    print("\nTop Keywords by Year:")
+    keyword_trend = compute_keyword_trend(df)
+    for year, keywords in keyword_trend.items():
+        print(f"\n{year}:")
+        for word, count in keywords:
+            print(f"- {word} ({count})")
 
 
 if __name__ == "__main__":
