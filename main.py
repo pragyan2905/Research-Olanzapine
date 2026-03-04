@@ -16,6 +16,7 @@ from retrieval.trend_analyzer import (
     compute_yearly_improvement,
     compute_keyword_trend
 )
+from retrieval.llm_synthesizer import generate_research_review
 
 
 def load_latest_dataset():
@@ -141,23 +142,24 @@ def main():
 
     print("\nStructured Research Summary:\n")
 
+    clusters = {}
+
     for _, row in results.iterrows():
         print("=" * 80)
         print(f"Title: {row['title']}")
         print(f"Year: {row['year']}")
-        print("\nKey Contribution:")
 
         key_points = extract_key_sentences(row["abstract"])
+        print("\nKey Contribution:")
         if key_points:
             for point in key_points:
                 print(f"- {point}")
         else:
             print("- No explicit contribution sentence detected.")
 
-        print("\nPerformance Signals:")
-
         metrics, sota_flag = extract_numeric_metrics(row["abstract"])
 
+        print("\nPerformance Signals:")
         if metrics:
             for m in metrics:
                 print(f"- {m['value']}% ({m['type']})")
@@ -169,44 +171,23 @@ def main():
 
         print("\n")
 
-    titles = []
-    abstracts = []
-    contributions = []
-
-    for _, row in results.iterrows():
-        titles.append(row["title"])
-        abstracts.append(row["abstract"])
-        key_points = extract_key_sentences(row["abstract"])
-        contributions.extend(key_points)
-
-    print(synthesize_comparison(titles, abstracts, contributions))
-
-    print("\nSemantic Clusters:\n")
-
     abstracts = results["abstract"].tolist()
     titles = results["title"].tolist()
 
     if len(abstracts) >= 2:
         labels = cluster_papers(abstracts, num_clusters=2)
-        clusters = {}
-
         for label, title in zip(labels, titles):
             clusters.setdefault(label, []).append(title)
 
+        print("\nSemantic Clusters:\n")
         for cluster_id, papers in clusters.items():
             print(f"\nCluster {cluster_id + 1}:")
             for paper in papers:
                 print(f"- {paper}")
-    else:
-        print("Not enough papers to cluster.")
-
-    print("\nPerformance Comparison Table:\n")
 
     comparison_rows = []
-
     for _, row in results.iterrows():
         metrics, sota_flag = extract_numeric_metrics(row["abstract"])
-
         for m in metrics:
             comparison_rows.append({
                 "Title": row["title"],
@@ -216,31 +197,59 @@ def main():
                 "SOTA": sota_flag
             })
 
+    performance_summary = ""
     if comparison_rows:
         comparison_df = pd.DataFrame(comparison_rows)
-        comparison_df = comparison_df.sort_values(
-            by="Improvement (%)",
-            ascending=False
-        )
-        print(comparison_df.to_string(index=False))
-    else:
-        print("No numeric comparison data extracted.")
+        comparison_df = comparison_df.sort_values(by="Improvement (%)", ascending=False)
+        performance_summary = comparison_df.to_string(index=False)
+
+        print("\nPerformance Comparison Table:\n")
+        print(performance_summary)
+
     print("\nResearch Trend Analysis:\n")
+
+    volume = compute_yearly_volume(static_df)
     print("Paper Volume by Year:")
-    volume = compute_yearly_volume(df)
     print(volume.to_string())
+
+    avg_improvement = compute_yearly_improvement(static_df, extract_numeric_metrics)
     print("\nAverage Improvement (%) by Year:")
-    avg_improvement = compute_yearly_improvement(df, extract_numeric_metrics)
     if avg_improvement is not None:
         print(avg_improvement.to_string())
     else:
         print("No improvement data available.")
+
+    keyword_trend = compute_keyword_trend(static_df)
     print("\nTop Keywords by Year:")
-    keyword_trend = compute_keyword_trend(df)
     for year, keywords in keyword_trend.items():
         print(f"\n{year}:")
         for word, count in keywords:
             print(f"- {word} ({count})")
+
+    print("\nGenerating LLM-Based Research Review...\n")
+
+    cluster_summary = ""
+    for cluster_id, papers in clusters.items():
+        cluster_summary += f"\nCluster {cluster_id + 1}:\n"
+        for paper in papers:
+            cluster_summary += f"- {paper}\n"
+
+    trend_summary_text = f"""
+Volume by Year:
+{volume.to_string()}
+
+Average Improvement by Year:
+{avg_improvement.to_string() if avg_improvement is not None else "N/A"}
+"""
+
+    review = generate_research_review(
+        user_query,
+        cluster_summary,
+        performance_summary,
+        trend_summary_text
+    )
+
+    print(review)
 
 
 if __name__ == "__main__":
