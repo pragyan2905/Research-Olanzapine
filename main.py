@@ -116,6 +116,45 @@ def clean_query(query):
     query = query.replace("recent", "")
     return query.strip()
 
+def build_llm_context(results):
+
+    context = ""
+
+    for _, row in results.iterrows():
+
+        contributions = extract_key_sentences(row["abstract"])
+        metrics, sota_flag = extract_numeric_metrics(row["abstract"])
+
+        context += f"""
+Paper Title: {row['title']}
+Year: {row['year']}
+
+Abstract:
+{row['abstract']}
+
+Key Contributions:
+"""
+
+        if contributions:
+            for c in contributions:
+                context += f"- {c}\n"
+        else:
+            context += "- Not explicitly extracted\n"
+
+        context += "\nPerformance Signals:\n"
+
+        if metrics:
+            for m in metrics:
+                context += f"- {m['value']}% ({m['type']})\n"
+        else:
+            context += "- No numeric metrics detected\n"
+
+        if sota_flag:
+            context += "- Claims state-of-the-art\n"
+
+        context += "\n----------------------------------\n"
+
+    return context
 
 def main():
     static_df = load_latest_dataset()
@@ -139,6 +178,7 @@ def main():
 
     cleaned_query = clean_query(user_query)
     results = research_query(df, embedder, store, cleaned_query, top_k=5)
+    context_block = build_llm_context(results)
 
     print("\nStructured Research Summary:\n")
 
@@ -243,11 +283,11 @@ Average Improvement by Year:
 """
 
     review = generate_research_review(
-        user_query,
-        cluster_summary,
-        performance_summary,
-        trend_summary_text
-    )
+    user_query,
+    context_block,
+    cluster_text,
+    trend_summary_text
+)
 
     print(review)
 

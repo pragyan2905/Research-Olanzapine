@@ -30,15 +30,17 @@ Performance Comparison Table:
 Trend Analysis:
 {trend_summary}
 
-Generate a detailed structured literature review with:
+You are an expert machine learning researcher.
 
-1. Overview of Research Landscape
-2. Major Methodological Directions
-3. Performance Comparison Insights
-4. Emerging Trends
-5. Open Challenges and Future Directions
+Analyze the retrieved papers with focus on:
 
-Be analytical and structured.
+1. Mathematical intuition behind the proposed methods
+2. Model architectures (neural networks, transformers, probabilistic models)
+3. Objective functions and optimization strategies
+4. Uncertainty estimation techniques
+5. Limitations of current methods
+
+Explain the reasoning behind each method, not just the applications.
 """
 
     response = client.models.generate_content(
